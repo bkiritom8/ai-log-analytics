@@ -8,8 +8,7 @@ from pyspark.ml import Pipeline
 from pyspark.ml.evaluation import ClusteringEvaluator
 import json
 import os
-from datetime import datetime
-from kafka import KafkaProducer
+from datetime import datetime, timedelta
 
 class RealTimeAnomalyDetector:
     def __init__(self):
@@ -28,11 +27,22 @@ class RealTimeAnomalyDetector:
         self.input_topic = "logs-raw"
         self.output_topic = "anomalies-detected"
         
-        # Initialize Kafka producer for alerts
-        self.kafka_producer = KafkaProducer(
-            bootstrap_servers=self.kafka_bootstrap_servers.split(","),
-            value_serializer=lambda x: json.dumps(x, default=str).encode('utf-8')
-        )
+        # Initialize Kafka producer for alerts (with error handling)
+        try:
+            from kafka import KafkaProducer
+            self.kafka_producer = KafkaProducer(
+                bootstrap_servers=self.kafka_bootstrap_servers.split(","),
+                value_serializer=lambda x: json.dumps(x, default=str).encode('utf-8'),
+                retries=3,
+                acks='all'
+            )
+            print("✅ Kafka producer initialized successfully")
+        except ImportError:
+            print("⚠️ kafka-python not available, using Spark Kafka sink only")
+            self.kafka_producer = None
+        except Exception as e:
+            print(f"⚠️ Failed to initialize Kafka producer: {e}")
+            self.kafka_producer = None
         
         # Define log schema
         self.log_schema = StructType([

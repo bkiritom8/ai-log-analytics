@@ -15,6 +15,7 @@ import boto3
 import os
 import json  # FIXED: Added missing import
 import logging
+import sys
 from datetime import datetime, timedelta
 
 # Configure logging
@@ -475,3 +476,135 @@ class LogAnalyticsMLTrainer:
                 feature_cols = [
                     "message_length", "word_count", "hour", "day_of_week", "is_weekend",
                     "is_business_hours", "has_exception", "has_timeout", "has_failed",
+                    "has_error_keywords", "has_performance_keywords", "service_encoded", "environment_encoded"
+                ]
+
+                # Prepare pipeline
+                assembler = VectorAssembler(
+                    inputCols=feature_cols,
+                    outputCol="features_raw",
+                    handleInvalid="skip"
+                )
+
+                scaler = StandardScaler(
+                    inputCol="features_raw",
+                    outputCol="features",
+                    withStd=True,
+                    withMean=True
+                )
+
+                # Index the label column
+                label_indexer = StringIndexer(
+                    inputCol="level",
+                    outputCol="label"
+                )
+
+                # Random Forest Classifier
+                rf = RandomForestClassifier(
+                    labelCol="label",
+                    featuresCol="features",
+                    numTrees=100,
+                    maxDepth=10,
+                    seed=42
+                )
+
+                pipeline = Pipeline(stages=[assembler, scaler, label_indexer, rf])
+
+                # Split data
+                train_df, test_df = df.randomSplit([0.8, 0.2], seed=42)
+
+                logger.info(f"📊 Training on {train_df.count()} records, testing on {test_df.count()}")
+
+                # Train model
+                model = pipeline.fit(train_df)
+
+                # Make predictions
+                predictions = model.transform(test_df)
+
+                # Evaluate
+                evaluator = MulticlassClassificationEvaluator(
+                    labelCol="label",
+                    predictionCol="prediction",
+                    metricName="accuracy"
+                )
+
+                accuracy = evaluator.evaluate(predictions)
+
+                logger.info(f"📈 Classification Accuracy: {accuracy:.3f}")
+
+                # Log metrics
+                mlflow.log_metric("accuracy", accuracy)
+
+                # Save model
+                timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+                model_path = f"s3a://{self.s3_models_bucket}/log_classification/{timestamp_str}"
+
+                try:
+                    model.write().overwrite().save(model_path)
+                    logger.info(f"✅ Classification model saved to S3: {model_path}")
+                except Exception as e:
+                    local_path = f"./models/log_classification_{timestamp_str}"
+                    model.write().overwrite().save(local_path)
+                    logger.warning(f"⚠️ S3 save failed, saved locally: {local_path}")
+
+                # Log model to MLflow
+                try:
+                    mlflow.spark.log_model(
+                        model,
+                        "log_classification_model",
+                        registered_model_name="LogClassifier"
+                    )
+                except Exception as e:
+                    logger.warning(f"⚠️ MLflow model logging failed: {e}")
+
+                logger.info(f"✅ Log classification model training completed")
+                return model
+
+        except Exception as e:
+            logger.error(f"❌ Log classification training failed: {e}")
+            raise e
+
+    def run_training_pipeline(self):
+        """Run complete ML training pipeline"""
+        logger.info("🚀 Starting ML Training Pipeline...")
+
+        try:
+            # Load data
+            df = self.load_historical_data(days_back=7)
+
+            # Feature engineering
+            df_features = self.feature_engineering(df)
+            df_features.cache()  # Cache for reuse
+
+            # Train anomaly detection model
+            anomaly_model = self.train_anomaly_detection_model(df_features)
+
+            # Train classification model
+            classification_model = self.train_log_classification_model(df_features)
+
+            df_features.unpersist()
+
+            logger.info("✅ ML Training Pipeline Completed Successfully")
+
+            return {
+                "anomaly_model": anomaly_model,
+                "classification_model": classification_model
+            }
+
+        except Exception as e:
+            logger.error(f"❌ ML Training Pipeline Failed: {e}")
+            raise e
+        finally:
+            self.spark.stop()
+
+
+if __name__ == "__main__":
+    try:
+        trainer = LogAnalyticsMLTrainer()
+        models = trainer.run_training_pipeline()
+        logger.info("🎉 All models trained successfully!")
+    except Exception as e:
+        logger.error(f"💥 Training failed: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

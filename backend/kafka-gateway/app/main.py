@@ -86,7 +86,7 @@ shutdown_event = threading.Event()
 # Pydantic Models
 class LogEntry(BaseModel):
     timestamp: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
-    level: str = Field(..., regex="^(DEBUG|INFO|WARN|ERROR|FATAL)$")
+    level: str = Field(..., pattern="^(DEBUG|INFO|WARN|ERROR|FATAL)$")
     message: str = Field(..., min_length=1, max_length=10000)
     service: str = Field(..., min_length=1, max_length=100)
     host: Optional[str] = Field(None, max_length=100)

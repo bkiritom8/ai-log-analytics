@@ -1,5 +1,5 @@
 # backend/kafka-gateway/app/main.py (FIXED VERSION)
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Set
@@ -635,7 +635,7 @@ async def search_logs(
     level: Optional[str] = None,
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None,
-    limit: int = Field(default=100, ge=1, le=10000)
+    limit: int = Query(default=100, ge=1, le=10000)
 ):
     """Search historical logs with filters"""
     # This would typically query a database or search engine

@@ -1,5 +1,4 @@
 # docker-compose.yml (FIXED VERSION)
-version: '3.8'
 
 networks:
   kafka-network:
@@ -73,11 +72,11 @@ services:
       - zookeeper_data:/var/lib/zookeeper/data
       - ./logs/zookeeper:/var/lib/zookeeper/log
     healthcheck:
-      test: ["CMD-SHELL", "echo 'ruok' | nc localhost 2181 | grep imok"]
+      test: ["CMD-SHELL", "nc -z localhost 2181 || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 20s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
     networks:
       - kafka-network
@@ -143,11 +142,11 @@ services:
       - ./spark:/opt/spark-apps
       - spark_logs:/opt/spark/logs
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080 || exit 1"]
+      test: ["CMD-SHELL", "nc -z localhost 8080 || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 30s
+      retries: 5
+      start_period: 40s
     restart: unless-stopped
     networks:
       - spark-network
@@ -172,11 +171,11 @@ services:
       - ./spark:/opt/spark-apps
       - spark_logs:/opt/spark/logs
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://spark-master:8080/api/v1/applications || exit 1"]
+      test: ["CMD-SHELL", "nc -z spark-master 7077 || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 30s
+      retries: 5
+      start_period: 40s
     restart: unless-stopped
     networks:
       - spark-network

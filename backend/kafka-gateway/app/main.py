@@ -114,7 +114,7 @@ def create_kafka_config():
         'retry.backoff.ms': 1000,
         'batch.size': 16384,
         'linger.ms': 10,
-        'buffer.memory': 33554432,
+        'queue.buffering.max.kbytes': 32768,
         'compression.type': 'lz4',
         'max.in.flight.requests.per.connection': 5,
         'enable.idempotence': True,
